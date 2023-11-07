@@ -10,8 +10,8 @@ namespace ReportSystem;
 
 public class ReportSystem : BasePlugin
 {
-    public override string ModuleName { get; }
-    public override string ModuleVersion { get; }
+    public override string ModuleName => "[Discord] ReportSystem by phantom";
+    public override string ModuleVersion => "v1.0.0";
 
     private Config _config;
     
