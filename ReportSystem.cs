@@ -38,14 +38,16 @@ public class ReportSystem : BasePlugin
     private void HandleMenu(CCSPlayerController controller, ChatMenuOption option)
     {
         var parts = option.Text.Split('[', ']');
-        if (parts.Length < 2) return;
-        var index = int.Parse(parts[1].Trim());
+        var lastPart = parts[parts.Length - 2];
+        var numbersOnly = string.Join("", lastPart.Where(char.IsDigit));
+        
+        var index = int.Parse(numbersOnly.Trim());
         var reason = File.ReadAllLines(Path.Combine(ModuleDirectory, "reasons.txt"));
         var reasonMenu = new ChatMenu("Reasons");
         reasonMenu.MenuOptions.Clear();
         foreach (var a in reason)
         {
-            reasonMenu.AddMenuOption($"{a}[{index}]", HandleMenu2);
+            reasonMenu.AddMenuOption($"{a} [{index}]", HandleMenu2);
         }
             
         ChatMenus.OpenMenu(controller, reasonMenu);
@@ -54,8 +56,10 @@ public class ReportSystem : BasePlugin
     private void HandleMenu2(CCSPlayerController controller, ChatMenuOption option)
     {
         var parts = option.Text.Split('[', ']');
-        if (parts.Length < 2) return;
-        var target = Utilities.GetPlayerFromIndex(int.Parse(parts[1].Trim()));
+        var lastPart = parts[parts.Length - 2];
+        var numbersOnly = string.Join("", lastPart.Where(char.IsDigit));
+        
+        var target = Utilities.GetPlayerFromIndex(int.Parse(numbersOnly.Trim()));
         
         Task.Run(() => SendMessageToDiscord(controller.PlayerName, controller.SteamID.ToString(), target.PlayerName,
             target.SteamID.ToString(), parts[0]));
