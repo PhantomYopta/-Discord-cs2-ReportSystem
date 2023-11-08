@@ -18,6 +18,10 @@ public class ReportSystem : BasePlugin
     public override void Load(bool hotReload)
     {
         _config = LoadConfig();
+        string mapsFilePath = Path.Combine(ModuleDirectory, "reasons.txt");
+        if (!File.Exists(mapsFilePath))
+            File.WriteAllText(mapsFilePath, "");
+        
         AddCommand("css_report", "", (controller, info) =>
         {
             if(controller == null) return;
@@ -152,7 +156,7 @@ public class ReportSystem : BasePlugin
             JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
 
         Console.ForegroundColor = ConsoleColor.DarkGreen;
-        Console.WriteLine("[MapChooser] The configuration was successfully saved to a file: " + configPath);
+        Console.WriteLine("[ReportSystem] The configuration was successfully saved to a file: " + configPath);
         Console.ResetColor();
 
         return config;
