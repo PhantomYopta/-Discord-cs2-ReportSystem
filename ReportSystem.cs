@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Menu;
@@ -10,17 +11,23 @@ namespace ReportSystem;
 
 public class ReportSystem : BasePlugin
 {
-    public override string ModuleName => "[Discord] ReportSystem by phantom";
+    public override string ModuleAuthor => "phantom";
+    public override string ModuleName => "[Discord] ReportSystem";
     public override string ModuleVersion => "v1.0.0";
 
-    private Config _config;
+    private Config _config = null!;
+    private readonly PersonTargetData?[] _selectedReason = new PersonTargetData?[Server.MaxPlayers];
     
     public override void Load(bool hotReload)
     {
         _config = LoadConfig();
-        string mapsFilePath = Path.Combine(ModuleDirectory, "reasons.txt");
+        
+        var mapsFilePath = Path.Combine(ModuleDirectory, "reasons.txt");
         if (!File.Exists(mapsFilePath))
             File.WriteAllText(mapsFilePath, "");
+        
+        RegisterListener<Listeners.OnClientConnected>(slot => _selectedReason[slot + 1] = new PersonTargetData());
+        RegisterListener<Listeners.OnClientDisconnectPost>(slot => _selectedReason[slot + 1] = null);
         
         AddCommand("css_report", "", (controller, info) =>
         {
@@ -30,25 +37,57 @@ public class ReportSystem : BasePlugin
             reportMenu.MenuOptions.Clear();
             foreach (var player in Utilities.GetPlayers())
             {
-                if(player.IsBot || player.PlayerName == controller.PlayerName) continue;
+                if(player.PlayerName == controller.PlayerName) continue;
                 
-                reportMenu.AddMenuOption($"{player.PlayerName} [{player.EntityIndex!.Value.Value}]", HandleMenu);
+                reportMenu.AddMenuOption($"{player.PlayerName} [{player.Index}]", HandleMenu);
             }
             
             ChatMenus.OpenMenu(controller, reportMenu);
         });
+        
+        AddCommandListener("say", Listener_Say);
+        AddCommandListener("say_team", Listener_Say);
+    }
+
+    private HookResult Listener_Say(CCSPlayerController? player, CommandInfo commandinfo)
+    {
+        if (player == null) return HookResult.Continue;
+
+        if (_selectedReason[player.Index] != null && _selectedReason[player.Index]!.IsSelectedReason)
+        {
+            var target = Utilities.GetPlayerFromIndex(_selectedReason[player.Index]!.Target);
+            
+            Task.Run(() => SendMessageToDiscord(player.PlayerName, player.SteamID.ToString(), target.PlayerName,
+                target.SteamID.ToString(), commandinfo.ArgString));
+            
+            _selectedReason[player.Index]!.IsSelectedReason = false;
+            
+            player.PrintToChat($"[\x0C ReportSystem\x01 ] You have successfully filed a report on player `{target.PlayerName}`");
+            return HookResult.Handled;
+        }
+
+        return HookResult.Continue;
     }
 
     private void HandleMenu(CCSPlayerController controller, ChatMenuOption option)
     {
         var parts = option.Text.Split('[', ']');
-        var lastPart = parts[parts.Length - 2];
+        var lastPart = parts[^2];
         var numbersOnly = string.Join("", lastPart.Where(char.IsDigit));
         
         var index = int.Parse(numbersOnly.Trim());
         var reason = File.ReadAllLines(Path.Combine(ModuleDirectory, "reasons.txt"));
         var reasonMenu = new ChatMenu("Reasons");
         reasonMenu.MenuOptions.Clear();
+
+        reasonMenu.AddMenuOption($"My reason [{index}]", (playerController, menuOption) =>
+        {
+            if (_selectedReason[playerController.Index] == null) return;
+            
+            _selectedReason[playerController.Index]!.IsSelectedReason = true;
+            _selectedReason[playerController.Index]!.Target = index;
+            playerController.PrintToChat($"[\x0C ReportSystem\x01 ] Enter a reason:");
+        });
         foreach (var a in reason)
         {
             reasonMenu.AddMenuOption($"{a} [{index}]", HandleMenu2);
@@ -60,13 +99,15 @@ public class ReportSystem : BasePlugin
     private void HandleMenu2(CCSPlayerController controller, ChatMenuOption option)
     {
         var parts = option.Text.Split('[', ']');
-        var lastPart = parts[parts.Length - 2];
+        var lastPart = parts[^2];
         var numbersOnly = string.Join("", lastPart.Where(char.IsDigit));
         
         var target = Utilities.GetPlayerFromIndex(int.Parse(numbersOnly.Trim()));
         
         Task.Run(() => SendMessageToDiscord(controller.PlayerName, controller.SteamID.ToString(), target.PlayerName,
             target.SteamID.ToString(), parts[0]));
+        
+        controller.PrintToChat($"[\x0C ReportSystem\x01 ] You have successfully filed a report on player `{target.PlayerName}`");
     }
 
     private async void SendMessageToDiscord(string clientName, string clientSteamId, string targetName,
@@ -168,5 +209,11 @@ public class ReportSystem : BasePlugin
 }
 public class Config
 {
-    public string WebhookUrl { get; set; }
+    public required string WebhookUrl { get; set; }
+}
+
+public class PersonTargetData
+{
+    public int Target { get; set; }
+    public bool IsSelectedReason { get; set; }
 }
