@@ -13,6 +13,6 @@ Allows players to send reports (complaints) about other players.
   "WebhookUrl": "https://discord.com/api/webhooks/"
 }
 ```
-
+ 
 # Commands
 `css_report` `!report` - Send report
