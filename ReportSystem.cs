@@ -13,7 +13,7 @@ public class ReportSystem : BasePlugin
 {
     public override string ModuleAuthor => "phantom";
     public override string ModuleName => "[Discord] ReportSystem";
-    public override string ModuleVersion => "v1.0.0";
+    public override string ModuleVersion => "v1.0.1";
 
     private Config _config = null!;
     private readonly PersonTargetData?[] _selectedReason = new PersonTargetData?[Server.MaxPlayers];
@@ -37,7 +37,7 @@ public class ReportSystem : BasePlugin
             reportMenu.MenuOptions.Clear();
             foreach (var player in Utilities.GetPlayers())
             {
-                if(player.PlayerName == controller.PlayerName) continue;
+                if(player.IsBot || player.PlayerName == controller.PlayerName) continue;
                 
                 reportMenu.AddMenuOption($"{player.PlayerName} [{player.Index}]", HandleMenu);
             }
@@ -47,7 +47,7 @@ public class ReportSystem : BasePlugin
         
         AddCommandListener("say", Listener_Say);
         AddCommandListener("say_team", Listener_Say);
-    }
+    }  
 
     private HookResult Listener_Say(CCSPlayerController? player, CommandInfo commandinfo)
     {
@@ -55,17 +55,21 @@ public class ReportSystem : BasePlugin
 
         if (_selectedReason[player.Index] != null && _selectedReason[player.Index]!.IsSelectedReason)
         {
+            var msg = GetTextInsideQuotes(commandinfo.ArgString);
             var target = Utilities.GetPlayerFromIndex(_selectedReason[player.Index]!.Target);
-            
-            Task.Run(() => SendMessageToDiscord(player.PlayerName, player.SteamID.ToString(), target.PlayerName,
-                target.SteamID.ToString(), commandinfo.ArgString));
-            
-            _selectedReason[player.Index]!.IsSelectedReason = false;
-            
-            player.PrintToChat($"[\x0C ReportSystem\x01 ] You have successfully filed a report on player `{target.PlayerName}`");
-            return HookResult.Handled;
+            switch (msg)
+            {
+                case "cancel":
+                    _selectedReason[player.Index]!.IsSelectedReason = false;
+                    return HookResult.Handled;
+                default:
+                    Task.Run(() => SendMessageToDiscord(player.PlayerName, player.SteamID.ToString(), target.PlayerName,
+                        target.SteamID.ToString(), commandinfo.ArgString));
+                    _selectedReason[player.Index]!.IsSelectedReason = false;
+                    player.PrintToChat($"[\x0C ReportSystem\x01 ] You have successfully filed a report on player `{target.PlayerName}`");
+                    return HookResult.Handled;
+            }
         }
-
         return HookResult.Continue;
     }
 
@@ -86,7 +90,7 @@ public class ReportSystem : BasePlugin
             
             _selectedReason[playerController.Index]!.IsSelectedReason = true;
             _selectedReason[playerController.Index]!.Target = index;
-            playerController.PrintToChat($"[\x0C ReportSystem\x01 ] Enter a reason:");
+            playerController.PrintToChat($"[\x0C ReportSystem\x01 ] Write a reason, or write\x02 cancel\x01 to abort the submission.");
         });
         foreach (var a in reason)
         {
@@ -205,6 +209,19 @@ public class ReportSystem : BasePlugin
     private string GetWebhook()
     {
         return _config.WebhookUrl;
+    }
+    
+    private string GetTextInsideQuotes(string input)
+    {
+        var startIndex = input.IndexOf('"');
+        var endIndex = input.LastIndexOf('"');
+
+        if (startIndex != -1 && endIndex != -1 && startIndex < endIndex)
+        {
+            return input.Substring(startIndex + 1, endIndex - startIndex - 1);
+        }
+
+        return string.Empty;
     }
 }
 public class Config
